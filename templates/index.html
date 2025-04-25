@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRS Chat</title>
+    <link rel="stylesheet" href="../static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/3.0.8/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>MRS Chat</h1>
+            <button id="clear-btn">Xóa lịch sử</button>
+        </div>
+        <div class="chat-body" id="chat-body"></div>
+        <div class="chat-input">
+            <form id="chat-form">
+                <input type="text" id="user-input" placeholder="Nhập câu hỏi..." required>
+                <button type="submit">🡅</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const chatForm = document.getElementById('chat-form');
+            const userInput = document.getElementById('user-input');
+            const chatBody = document.getElementById('chat-body');
+            const clearBtn = document.getElementById('clear-btn');
+
+            // Tải lịch sử trò chuyện từ localStorage
+            const chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            chatHistory.forEach(msg => addMessage(msg.type, msg.content));
+
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const message = userInput.value.trim();
+                if (!message) return;
+
+                // Thêm tin nhắn của người dùng
+                addMessage('user', message);
+                userInput.value = "";
+
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_input: message })
+                    });
+
+                    if (!response.ok) throw new Error('Server error');
+                    
+                    const data = await response.json();
+                    const botResponse = DOMPurify.sanitize(marked.parse(data.bot_response));
+                    addMessage('bot', botResponse);
+                } catch (error) {
+                    addMessage('error', 'Có lỗi xảy ra, vui lòng thử lại!');
+                } finally {
+                    scrollToBottom();
+                }
+            });
+
+            clearBtn.addEventListener('click', async () => {
+                await fetch('/clear', { method: 'POST' });
+                chatBody.innerHTML = '';
+                localStorage.removeItem('chatHistory');
+            });
+
+            function addMessage(type, content) {
+                const div = document.createElement('div');
+                div.className = `message ${type}-message`;
+                div.innerHTML = content;
+                chatBody.appendChild(div);
+                saveChatHistory(type, content);
+            }
+
+            function saveChatHistory(type, content) {
+                const chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+                chatHistory.push({ type, content });
+                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            }
+
+            function scrollToBottom() {
+                chatBody.scrollTo({ top: chatBody.scrollHeight, behavior: "smooth" });
+            }
+        });
+    </script>
+</body>
+</html>
